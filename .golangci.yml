@@ -39,6 +39,9 @@ linters:
 
 issues:
   exclude-rules:
+    - text: "ST1003:"
+      linters:
+        - stylecheck
     - path: server/configuration.go
       linters:
         - unused
