@@ -7,10 +7,16 @@ import (
 )
 
 func TestParserGoodInputs(t *testing.T) {
+	const (
+		YES      = 0
+		NO       = 1
+		DND_ONLY = 2
+	)
 	testCases := []struct {
 		query    string
 		rolls    []int
 		expected int
+		success  int
 		render   string
 	}{
 		{query: "1", expected: 1},
@@ -36,8 +42,8 @@ func TestParserGoodInputs(t *testing.T) {
 		{query: "3d20d2", rolls: []int{12, 10, 3}, expected: 12},
 		{query: "3d20dh2", rolls: []int{12, 10, 3}, expected: 3},
 		{query: "3d20dl2", rolls: []int{12, 10, 3}, expected: 12},
-		{query: "d20a", rolls: []int{12, 10}, expected: 12},
-		{query: "d20d", rolls: []int{12, 10}, expected: 10},
+		{query: "d20a", rolls: []int{12, 10}, expected: 12, success: DND_ONLY},
+		{query: "d20d", rolls: []int{12, 10}, expected: 10, success: DND_ONLY},
 		{query: "1d20 for insight",
 			rolls:    []int{17},
 			expected: 17,
@@ -49,6 +55,7 @@ func TestParserGoodInputs(t *testing.T) {
 		{query: "d20a+3",
 			rolls:    []int{16, 5},
 			expected: 19,
+			success:  DND_ONLY,
 			render:   "d20a+3 = **19**\n- *d20a (16 ~~5~~) =* ***16***"},
 		{query: "1d12+5",
 			rolls:    []int{12},
@@ -63,25 +70,31 @@ func TestParserGoodInputs(t *testing.T) {
 			expected: 42,
 			render:   "2d6+4+10+3d8+1d4+2 = **42**\n- *2d6 (3 4) =* ***7***\n- *3d8 (1 7 8) =* ***16***\n- *1d4 =* ***3***"},
 		{query: "d%+3+2d%+1d4*5d%k2-d%a",
+			success:  DND_ONLY,
 			rolls:    []int{56, 40, 30, 2, 21, 38, 16, 55, 3, 21, 31},
 			expected: 284,
 			render:   "d%+3+2d%+1d4×5d%k2-d%a = **284**\n- *d% =* ***56***\n- *2d% (40 30) =* ***70***\n- *1d4 =* ***2***\n- *5d%k2 (~~21~~ 38 ~~16~~ 55 ~~3~~) =* ***93***\n- *d%a (~~21~~ 31) =* ***31***"},
 		{query: "sTaTs",
-			rolls:  []int{2, 5, 2, 3, 5, 4, 6, 2, 2, 1, 2, 4, 3, 4, 1, 6, 1, 5, 6, 6, 3, 4, 2, 5},
-			render: "up a new character! Adventure awaits. In the meanwhile, here are your ability scores:\n**17**, **15**, **13**, **12**, **10**, **8**\n- *4d6d1 (~~2~~ 5 2 3) =* ***10***\n- *4d6d1 (5 4 6 ~~2~~) =* ***15***\n- *4d6d1 (2 ~~1~~ 2 4) =* ***8***\n- *4d6d1 (3 4 ~~1~~ 6) =* ***13***\n- *4d6d1 (~~1~~ 5 6 6) =* ***17***\n- *4d6d1 (3 4 ~~2~~ 5) =* ***12***"},
+			success: DND_ONLY,
+			rolls:   []int{2, 5, 2, 3, 5, 4, 6, 2, 2, 1, 2, 4, 3, 4, 1, 6, 1, 5, 6, 6, 3, 4, 2, 5},
+			render:  "up a new character! Adventure awaits. In the meanwhile, here are your ability scores:\n**17**, **15**, **13**, **12**, **10**, **8**\n- *4d6d1 (~~2~~ 5 2 3) =* ***10***\n- *4d6d1 (5 4 6 ~~2~~) =* ***15***\n- *4d6d1 (2 ~~1~~ 2 4) =* ***8***\n- *4d6d1 (3 4 ~~1~~ 6) =* ***13***\n- *4d6d1 (~~1~~ 5 6 6) =* ***17***\n- *4d6d1 (3 4 ~~2~~ 5) =* ***12***"},
 		{query: "death-save",
+			success:  DND_ONLY,
 			rolls:    []int{1},
 			expected: 1,
 			render:   "a death saving throw, and suffers **A CRITICAL FAIL!** :coffin:\n- *1d20 =* ***1***"},
 		{query: "death save",
+			success:  DND_ONLY,
 			rolls:    []int{9},
 			expected: 9,
 			render:   "a death saving throw, and **FAILS** :skull:\n- *1d20 =* ***9***"},
 		{query: "deathsave",
+			success:  DND_ONLY,
 			rolls:    []int{10},
 			expected: 10,
 			render:   "a death saving throw, and **SUCCEEDS** :thumbsup:\n- *1d20 =* ***10***"},
 		{query: "DEATH-save",
+			success:  DND_ONLY,
 			rolls:    []int{20},
 			expected: 20,
 			render:   "a death saving throw, and **REGAINS 1 HP!** :star-struck:\n- *1d20 =* ***20***"},
@@ -102,56 +115,58 @@ func TestParserGoodInputs(t *testing.T) {
 		{query: "1d20+4 to hit, (1d6+2 slashing)+(2d8 radiant) damage",
 			rolls:  []int{16, 3, 6, 2},
 			render: "1d20+4, (1d6+2)+(2d8) = **20** to hit, **13** damage\n- *1d20 =* ***16***\n- *1d6+2 =* ***5*** *slashing*\n  - *1d6 =* ***3***\n- *2d8 (6 2) =* ***8*** *radiant*"},
+		{query: "hello",
+			success: NO},
+		{query: "-2",
+			success: NO},
+		{query: "5+",
+			success: NO},
+		{query: "/7",
+			success: NO},
+		{query: "(10-3",
+			success: NO},
 	}
-	for _, testCase := range testCases {
-		parsedNode, err := parse(testCase.query)
-		message := "Testing case " + testCase.query
-		assert.Nil(t, err, message)
-		assert.NotNil(t, parsedNode, message)
-		rollerError := ""
-		rollerIdx := 0
-		roller := func(x int) int {
-			ret := 0
-			if testCase.rolls == nil {
-				rollerError = "Needs mocked rolls"
-				return 1001
+	for _, enableDnd := range []bool{false, true} {
+		parse := GetParser(configuration{EnableDnd5e: enableDnd})
+		for _, testCase := range testCases {
+			parsedNode, err := parse(testCase.query)
+			message := "Testing case " + testCase.query
+			if testCase.success == YES || (testCase.success == DND_ONLY && enableDnd) {
+				assert.Nil(t, err, message)
+				assert.NotNil(t, parsedNode, message)
+				rollerError := ""
+				rollerIdx := 0
+				roller := func(x int) int {
+					ret := 0
+					if testCase.rolls == nil {
+						rollerError = "Needs mocked rolls"
+						return 1001
+					}
+					rolls := testCase.rolls
+					if len(rolls) <= rollerIdx {
+						rollerError = "Needs more mocked rolls"
+						return 1002
+					}
+					ret = rolls[rollerIdx]
+					rollerIdx++
+					if ret < 1 || x < ret {
+						rollerError = "Roll out of range"
+					}
+					return ret
+				}
+				rolledNode := parsedNode.roll(roller)
+				assert.Equal(t, "", rollerError)
+				if 0 < rollerIdx && testCase.rolls != nil {
+					assert.Equal(t, rollerIdx, len(testCase.rolls))
+				}
+				assert.Equal(t, testCase.expected, rolledNode.value(), message)
+				if testCase.render != "" {
+					resultText := rolledNode.renderToplevel()
+					assert.Equal(t, testCase.render, resultText, message)
+				}
+			} else {
+				assert.NotNil(t, err, message)
 			}
-			rolls := testCase.rolls
-			if len(rolls) <= rollerIdx {
-				rollerError = "Needs more mocked rolls"
-				return 1002
-			}
-			ret = rolls[rollerIdx]
-			rollerIdx++
-			if ret < 1 || x < ret {
-				rollerError = "Roll out of range"
-			}
-			return ret
 		}
-		rolledNode := parsedNode.roll(roller)
-		assert.Equal(t, "", rollerError)
-		if 0 < rollerIdx && testCase.rolls != nil {
-			assert.Equal(t, rollerIdx, len(testCase.rolls))
-		}
-		assert.Equal(t, testCase.expected, rolledNode.value(), message)
-		if testCase.render != "" {
-			resultText := rolledNode.renderToplevel()
-			assert.Equal(t, testCase.render, resultText, message)
-		}
-	}
-}
-
-func TestParserBadInputs(t *testing.T) {
-	testCases := []string{
-		"hello",
-		"-2",
-		"5+",
-		"/7",
-		"(10-3",
-	}
-	for _, testCase := range testCases {
-		_, err := parse(testCase)
-		message := "Testing case " + testCase
-		assert.NotNil(t, err, message)
 	}
 }

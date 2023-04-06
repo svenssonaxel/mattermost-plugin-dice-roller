@@ -92,7 +92,12 @@ func initTestPlugin() (*Plugin, *plugintest.API) {
 		Nickname: "User",
 	}, (*model.AppError)(nil))
 
-	p := Plugin{}
+	p := Plugin{
+		configuration: &configuration{
+			EnableDnd5e: true,
+		},
+	}
+	p.parser = GetParser(*p.configuration)
 	p.SetAPI(api)
 
 	return &p, api

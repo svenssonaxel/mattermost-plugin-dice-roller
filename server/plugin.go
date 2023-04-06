@@ -20,6 +20,9 @@ const (
 //go:embed helptext.md
 var helpText string
 
+//go:embed helptext-dnd5e.md
+var helpTextDnd5e string
+
 // Plugin implements the interface expected by the Mattermost server to communicate between the server and plugin processes.
 type Plugin struct {
 	plugin.MattermostPlugin
@@ -30,6 +33,9 @@ type Plugin struct {
 	// configuration is the active plugin configuration. Consult getConfiguration and
 	// setConfiguration for usage.
 	configuration *configuration
+
+	// function used to parse dice rolls
+	parser func(input string) (*Node, error)
 
 	// BotId of the created bot account for dice rolling
 	diceBotID string
@@ -49,13 +55,19 @@ func (p *Plugin) OnActivate() error {
 }
 
 func (p *Plugin) GetHelpMessage() *model.CommandResponse {
+	text := helpText
+	if p.getConfiguration().EnableDnd5e {
+		text += helpTextDnd5e
+	}
+	text += "⚅ ⚂ Let's get rolling! ⚁ ⚄"
+
 	props := map[string]interface{}{
 		"from_webhook": "true",
 	}
 
 	return &model.CommandResponse{
 		ResponseType: model.CommandResponseTypeEphemeral,
-		Text:         helpText,
+		Text:         text,
 		Props:        props,
 	}
 }
@@ -80,7 +92,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 		// because dice rolls don't need to be cryptographically secure.
 		//#nosec G404
 		roller := func(x int) int { return 1 + rand.Intn(x) }
-		post, generatePostError := p.generateDicePost(query, args.UserId, args.ChannelId, args.RootId, roller)
+		post, generatePostError := p.generateDicePost(query, args.UserId, args.ChannelId, args.RootId, roller, p.parser)
 		if generatePostError != nil {
 			return nil, generatePostError
 		}
@@ -95,7 +107,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 	return nil, appError("Expected trigger "+cmd+" but got "+args.Command, nil)
 }
 
-func (p *Plugin) generateDicePost(query, userID, channelID, rootID string, roller Roller) (*model.Post, *model.AppError) {
+func (p *Plugin) generateDicePost(query, userID, channelID, rootID string, roller Roller, parse func(input string) (*Node, error)) (*model.Post, *model.AppError) {
 	// Get the user to display their name
 	user, userErr := p.API.GetUser(userID)
 	if userErr != nil {

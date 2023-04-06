@@ -74,6 +74,8 @@ Capital/small letters are interchangeable.
   ![demo](doc/demo_labels.png)
 
 ### Functionality specific to DnD 5e
+Some functionality is specific to DnD 5e.
+This can be turned off in settings.
 
 - **Advantage/disadvantage:**
   As a special shortcut, `dXa` means `2dXk1`, and `dXd` means `2dXkl1`.

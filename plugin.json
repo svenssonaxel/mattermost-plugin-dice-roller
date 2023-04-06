@@ -21,6 +21,14 @@
     "settings_schema": {
         "header": "",
         "footer": "* To report an issue, make a suggestion or a contribution, [check the GitHub repository](https://github.com/moussetc/mattermost-plugin-dice-roller/)",
-        "settings": []
+        "settings": [
+            {
+                "key": "enable_dnd5e",
+                "display_name": "DnD 5e functionality:",
+                "type": "bool",
+                "help_text": "When true, enable functionality specific to DnD 5e. This includes advantage, disadvantage, stats, and death saving throws.",
+                "default": true
+            }
+        ]
     }
 }
