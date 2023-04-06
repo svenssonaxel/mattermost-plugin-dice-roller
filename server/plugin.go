@@ -123,7 +123,7 @@ func (p *Plugin) generateDicePost(query, userID, channelID, rootID string, rolle
 		return nil, appError(fmt.Sprintf("%s: See `/roll help` for examples.", err.Error()), err)
 	}
 
-	rolledNode := parsedNode.roll(roller)
+	rolledNode := parsedNode.roll(roller, *p.configuration)
 	renderResult := rolledNode.renderToplevel()
 
 	text := fmt.Sprintf("**%s** rolls %s", displayName, renderResult)
