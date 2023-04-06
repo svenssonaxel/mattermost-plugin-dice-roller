@@ -22,6 +22,7 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type configuration struct {
+	EnableDnd5e bool `json:"enable_dnd5e"`
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -39,7 +40,9 @@ func (p *Plugin) getConfiguration() *configuration {
 	defer p.configurationLock.RUnlock()
 
 	if p.configuration == nil {
-		return &configuration{}
+		return &configuration{
+			EnableDnd5e: true,
+		}
 	}
 
 	return p.configuration
@@ -82,6 +85,7 @@ func (p *Plugin) OnConfigurationChange() error {
 	}
 
 	p.setConfiguration(configuration)
+	p.parser = GetParser(*configuration)
 
 	diceBotID, ensureBotError := p.Helpers.EnsureBot(&model.Bot{
 		Username:    "dicerollerbot",
