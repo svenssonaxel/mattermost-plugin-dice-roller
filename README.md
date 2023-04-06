@@ -92,7 +92,10 @@ This can be turned off in settings.
   Use `/roll death save` to roll a death save for DnD 5e:
 
   ![demo](doc/demo_ds.png)
+- **Roll comment:**
+  For (sub)expressions that only use one d20 dice, display a comment for NAT 1 and NAT 20.
 
+  ![demo](doc/demo_rollcomment.png)
 ## Compatibility
 
 Use the following table to find the correct plugin version for your Mattermost server version:

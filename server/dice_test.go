@@ -13,11 +13,12 @@ func TestParserGoodInputs(t *testing.T) {
 		DND_ONLY = 2
 	)
 	testCases := []struct {
-		query    string
-		rolls    []int
-		expected int
-		success  int
-		render   string
+		query       string
+		rolls       []int
+		expected    int
+		success     int
+		render      string
+		renderBasic string
 	}{
 		{query: "1", expected: 1},
 		{query: "5", expected: 5},
@@ -125,9 +126,51 @@ func TestParserGoodInputs(t *testing.T) {
 			success: NO},
 		{query: "(10-3",
 			success: NO},
+		{query: "1d20+5",
+			rolls:       []int{1},
+			expected:    6,
+			render:      "1d20+5 = **6** (NAT1! :grimacing:)\n- *1d20 =* ***1***",
+			renderBasic: "1d20+5 = **6**\n- *1d20 =* ***1***"},
+		{query: "1d20+5",
+			rolls:       []int{20},
+			expected:    25,
+			render:      "1d20+5 = **25** (NAT20! :star-struck:)\n- *1d20 =* ***20***",
+			renderBasic: "1d20+5 = **25**\n- *1d20 =* ***20***"},
+		{query: "1d20 for insight",
+			rolls:       []int{20},
+			expected:    20,
+			render:      "1d20 = **20** for insight (NAT20! :star-struck:)",
+			renderBasic: "1d20 = **20** for insight"},
+		{query: "1d20+5 for insight",
+			rolls:       []int{20},
+			expected:    25,
+			render:      "1d20+5 = **25** for insight (NAT20! :star-struck:)\n- *1d20 =* ***20***",
+			renderBasic: "1d20+5 = **25** for insight\n- *1d20 =* ***20***"},
+		{query: "1d20+4 to hit, (1d6+2 slashing)+(2d8 radiant) damage",
+			rolls:       []int{20, 3, 6, 2},
+			render:      "1d20+4, (1d6+2)+(2d8) = **24** to hit (NAT20! :star-struck:), **13** damage\n- *1d20 =* ***20***\n- *1d6+2 =* ***5*** *slashing*\n  - *1d6 =* ***3***\n- *2d8 (6 2) =* ***8*** *radiant*",
+			renderBasic: "1d20+4, (1d6+2)+(2d8) = **24** to hit, **13** damage\n- *1d20 =* ***20***\n- *1d6+2 =* ***5*** *slashing*\n  - *1d6 =* ***3***\n- *2d8 (6 2) =* ***8*** *radiant*"},
+		{query: "1d20+4 to hit, (1d6+2 slashing)+(2d8 radiant) damage, (d20*10-(2d%kl1 discount percentage)*2)/3 feywild encounter",
+			rolls:       []int{1, 3, 6, 2, 20, 14, 76},
+			render:      "1d20+4, (1d6+2)+(2d8), (d20×10-(2d%kl1)×2)/3 = **5** to hit (NAT1! :grimacing:), **13** damage, **57** feywild encounter\n- *1d20 =* ***1***\n- *1d6+2 =* ***5*** *slashing*\n  - *1d6 =* ***3***\n- *2d8 (6 2) =* ***8*** *radiant*\n- *d20 =* ***20*** (NAT20! :star-struck:)\n- *2d%kl1 (14 ~~76~~) =* ***14*** *discount percentage*",
+			renderBasic: "1d20+4, (1d6+2)+(2d8), (d20×10-(2d%kl1)×2)/3 = **5** to hit, **13** damage, **57** feywild encounter\n- *1d20 =* ***1***\n- *1d6+2 =* ***5*** *slashing*\n  - *1d6 =* ***3***\n- *2d8 (6 2) =* ***8*** *radiant*\n- *d20 =* ***20***\n- *2d%kl1 (14 ~~76~~) =* ***14*** *discount percentage*"},
+		{query: "3d20",
+			rolls:    []int{20, 10, 1},
+			expected: 31,
+			render:   "3d20 = **31**\n- *3d20 (20 10 1) =* ***31***"},
+		{query: "3d20k2",
+			rolls:    []int{20, 10, 1},
+			expected: 30,
+			render:   "3d20k2 = **30**\n- *3d20k2 (20 10 ~~1~~) =* ***30***"},
+		{query: "3d20k1",
+			rolls:       []int{20, 10, 1},
+			expected:    20,
+			render:      "3d20k1 = **20** (NAT20! :star-struck:)\n- *3d20k1 (20 ~~10~~ ~~1~~) =* ***20***",
+			renderBasic: "3d20k1 = **20**\n- *3d20k1 (20 ~~10~~ ~~1~~) =* ***20***"},
 	}
 	for _, enableDnd := range []bool{false, true} {
-		parse := GetParser(configuration{EnableDnd5e: enableDnd})
+		conf := configuration{EnableDnd5e: enableDnd}
+		parse := GetParser(conf)
 		for _, testCase := range testCases {
 			parsedNode, err := parse(testCase.query)
 			message := "Testing case " + testCase.query
@@ -154,7 +197,7 @@ func TestParserGoodInputs(t *testing.T) {
 					}
 					return ret
 				}
-				rolledNode := parsedNode.roll(roller)
+				rolledNode := parsedNode.roll(roller, conf)
 				assert.Equal(t, "", rollerError)
 				if 0 < rollerIdx && testCase.rolls != nil {
 					assert.Equal(t, rollerIdx, len(testCase.rolls))
@@ -162,7 +205,11 @@ func TestParserGoodInputs(t *testing.T) {
 				assert.Equal(t, testCase.expected, rolledNode.value(), message)
 				if testCase.render != "" {
 					resultText := rolledNode.renderToplevel()
-					assert.Equal(t, testCase.render, resultText, message)
+					if testCase.renderBasic != "" && !enableDnd {
+						assert.Equal(t, testCase.renderBasic, resultText, message)
+					} else {
+						assert.Equal(t, testCase.render, resultText, message)
+					}
 				}
 			} else {
 				assert.NotNil(t, err, message)
