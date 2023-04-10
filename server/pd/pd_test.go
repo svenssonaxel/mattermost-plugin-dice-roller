@@ -115,6 +115,13 @@ func TestDiceComplex(t *testing.T) {
 		res = res.Div(pd.OnePD)
 	}
 	assert.Equal(t, "465", res.ExpectedValue().Render(""))
+
+	expr_a := pd.Dice(20, 12, 0, 0)
+	expr_b := pd.Dice(30, 6, 2, 0)
+	expr_c := pd.Constant(n(7))
+	expr_d := pd.Constant(n(2))
+	res2 := expr_a.Plus(expr_b).Plus(expr_c).Div(expr_d)
+	assert.Equal(t, "119 1697959580431178797867/1727139997818229358592", res2.ExpectedValue().Render(""))
 }
 
 // Test high number of dropped dice.
