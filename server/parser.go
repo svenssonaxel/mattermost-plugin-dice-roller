@@ -13,12 +13,20 @@ func GetParser(c configuration) func(input string) (*Node, error) {
 		value Parser
 
 		sumOp  = Chars("+-", 1, 1)
-		prodOp = Chars("*×/", 1, 1)
+		prodOp = Any("//", Chars("*×/÷", 1, 1))
 
 		natural = Regex("[1-9][0-9]*").Map(func(r *Result) {
+			if len(r.Token) > 7 {
+				r.Result = fmt.Errorf("number too large: %s", r.Token)
+				return
+			}
 			n, err := strconv.Atoi(r.Token)
 			if err != nil {
 				r.Result = err
+				return
+			}
+			if n > 1000000 {
+				r.Result = fmt.Errorf("number too large: %d", n)
 				return
 			}
 			r.Result = makeNode(r.Token, []Result{}, Natural{n: n})

@@ -24,7 +24,7 @@ Capital/small letters are interchangeable.
 
     ![demo](doc/demo_5d6.png)
 - **Math:**
-  Integers and operators `()+-*/` have their usual meanings, except `/` rounds down.
+  Integers and operators `()+-*/` have their usual meanings, except `/` rounds towards zero (use double-slash `//` or division sign `÷` for real division).
   This means that
   - you can add modifiers to any roll. For example,
 
@@ -96,6 +96,12 @@ This can be turned off in settings.
   For (sub)expressions that only use one d20 dice, display a comment for NAT 1 and NAT 20.
 
   ![demo](doc/demo_rollcomment.png)
+### Roll analyzer
+Use the `/analyzeroll` command to see the average and probability distribution for a roll.
+This command takes the same arguments as the `/roll` command.
+For example, `/analyzeroll 3d4k1+5` will display:
+
+![demo](doc/demo_analyzeroll.png)
 ## Compatibility
 
 Use the following table to find the correct plugin version for your Mattermost server version:
@@ -112,12 +118,16 @@ Use the following table to find the correct plugin version for your Mattermost s
 **In Mattermost 5.20 and later:**
 1. In Mattermost, go to **Main Menu > Plugin Marketplace**.
 2. Search for the "Dice Roller" plugin, then click **Install** to install it.
-3. **Activate the plugin** in the `System Console > Plugins Management > Management` page
+3. **Activate the plugin** in the `System Console > Plugins Management > Management` page.
+4. Make sure **Enable Inline Latex Rendering** in turned on in the `System Console > Site Configuration > Posts` page to allow the plugin to render its output correctly.
+   If you do not wish to do so, you may instead turn off **Enable LaTeX** in the `System Console > Plugins > Dice Roller` page.
 
 If you are running Mattermost 5.19 or earlier, or do not have the Plugin Marketplace enabled, follow these steps:
 1. Go to the [Releases page](https://github.com/moussetc/mattermost-plugin-dice-roller/releases) and download the `.tar.gz` package. Supported platforms are: Linux x64, Windows x64, Darwin x64, FreeBSD x64.
-2. Use the Mattermost `System Console > Plugins Management > Management` page to upload the `.tar.gz` package
-3. **Activate the plugin** in the `System Console > Plugins Management > Management` page
+2. Use the Mattermost `System Console > Plugins Management > Management` page to upload the `.tar.gz` package.
+3. **Activate the plugin** in the `System Console > Plugins Management > Management` page.
+4. Make sure **Enable Inline Latex Rendering** in turned on in the `System Console > Site Configuration > Posts` page to allow the plugin to render its output correctly.
+   If you do not wish to do so, you may instead turn off **Enable LaTeX** in the `System Console > Plugins > Dice Roller` page.
 
 ### Configuration Notes in HA
 

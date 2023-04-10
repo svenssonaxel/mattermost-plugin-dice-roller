@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	trigger string = "roll"
+	trigger        string = "roll"
+	triggerAnalyze string = "analyzeroll"
 )
 
 //go:embed helptext.md
@@ -44,12 +45,24 @@ type Plugin struct {
 func (p *Plugin) OnActivate() error {
 	rand.Seed(time.Now().UnixNano())
 
-	return p.API.RegisterCommand(&model.Command{
+	err := p.API.RegisterCommand(&model.Command{
 		Trigger:          trigger,
 		Description:      "Roll one or more dice",
 		DisplayName:      "Dice roller ⚄",
 		AutoComplete:     true,
 		AutoCompleteDesc: "Roll one or several dice. ⚁ ⚄ Try /roll help for a list of possibilities.",
+		AutoCompleteHint: "(3d20+4)/2",
+	})
+	if err != nil {
+		return err
+	}
+
+	return p.API.RegisterCommand(&model.Command{
+		Trigger:          triggerAnalyze,
+		Description:      "Analyze dice roll expressions",
+		DisplayName:      "Dice roller ⚄",
+		AutoComplete:     true,
+		AutoCompleteDesc: "Analyze dice roll expressions. ⚁ ⚄ Try /roll help for a list of possibilities.",
 		AutoCompleteHint: "(3d20+4)/2",
 	})
 }
@@ -78,6 +91,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 		return nil, appError("Cannot access the plugin API.", nil)
 	}
 
+	// Dice roller
 	cmd := "/" + trigger
 	if strings.HasPrefix(args.Command, cmd) {
 		query := strings.TrimSpace((strings.Replace(args.Command, cmd, "", 1)))
@@ -93,6 +107,28 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 		//#nosec G404
 		roller := func(x int) int { return 1 + rand.Intn(x) }
 		post, generatePostError := p.generateDicePost(query, args.UserId, args.ChannelId, args.RootId, roller, p.parser)
+		if generatePostError != nil {
+			return nil, generatePostError
+		}
+		_, createPostError := p.API.CreatePost(post)
+		if createPostError != nil {
+			return nil, createPostError
+		}
+
+		return &model.CommandResponse{}, nil
+	}
+
+	// Dice roll analyzer
+	cmd = "/" + triggerAnalyze
+	if strings.HasPrefix(args.Command, cmd) {
+		query := strings.TrimSpace((strings.Replace(args.Command, cmd, "", 1)))
+
+		lQuery := strings.ToLower(query)
+		if lQuery == "help" || lQuery == "--help" || lQuery == "h" || lQuery == "-h" {
+			return p.GetHelpMessage(), nil
+		}
+
+		post, generatePostError := p.generateDiceAnalyzePost(query, args.UserId, args.ChannelId, args.RootId, p.parser)
 		if generatePostError != nil {
 			return nil, generatePostError
 		}
@@ -124,9 +160,38 @@ func (p *Plugin) generateDicePost(query, userID, channelID, rootID string, rolle
 	}
 
 	rolledNode := parsedNode.roll(roller, *p.configuration)
-	renderResult := rolledNode.renderToplevel()
+	renderResult := rolledNode.renderToplevel(ternaryStr(p.configuration.EnableLatex, "l", ""))
 
 	text := fmt.Sprintf("**%s** rolls %s", displayName, renderResult)
+
+	return &model.Post{
+		UserId:    p.diceBotID,
+		ChannelId: channelID,
+		RootId:    rootID,
+		Message:   text,
+	}, nil
+}
+
+func (p *Plugin) generateDiceAnalyzePost(query, userID, channelID, rootID string, parse func(input string) (*Node, error)) (*model.Post, *model.AppError) {
+	// Get the user to display their name
+	user, userErr := p.API.GetUser(userID)
+	if userErr != nil {
+		return nil, userErr
+	}
+	displayName := user.Nickname
+	if displayName == "" {
+		displayName = user.Username
+	}
+
+	parsedNode, err := parse(query)
+	if err != nil {
+		return nil, appError(fmt.Sprintf("%s: See `/roll help` for examples.", err.Error()), err)
+	}
+
+	prob := parsedNode.prob()
+	table := prob.Render(ternaryStr(p.configuration.EnableLatex, "l", ""))
+
+	text := fmt.Sprintf("**%s** analyzed roll `%s`:\n%s", displayName, query, table)
 
 	return &model.Post{
 		UserId:    p.diceBotID,
@@ -142,4 +207,11 @@ func appError(message string, err error) *model.AppError {
 		errorMessage = err.Error()
 	}
 	return model.NewAppError("Dice Roller Plugin", message, nil, errorMessage, http.StatusBadRequest)
+}
+
+func ternaryStr(cond bool, a, b string) string {
+	if cond {
+		return a
+	}
+	return b
 }

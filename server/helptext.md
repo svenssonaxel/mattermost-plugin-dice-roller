@@ -2,6 +2,7 @@
 To roll a set of dice, use the `/roll` command followed by one or several dice expressions.
 The results will be shown in the channel by @dicerollerbot, including total results and details as needed.
 Capital/small letters are interchangeable.
+You can also replace `/roll` by `/analyzeroll` to see the average and probability distribution for the roll.
 
 - **Basic dice:**
   `NdX` is `N` dice, each with `X` sides.
@@ -9,7 +10,7 @@ Capital/small letters are interchangeable.
   `X` can be `%` to mean `100`.
   For example, `/roll d20` will roll a 20-sided die and `/roll 5d%` will roll five 100-sided dice.
 - **Math:**
-  Integers and operators `()+-*/` have their usual meanings, except `/` rounds down.
+  Integers and operators `()+-*/` have their usual meanings, except `/` rounds towards zero (use double-slash `//` or division sign `÷` for real division).
   This means that you can add modifiers and roll different kinds of dice to get a total (for example `/roll 4d6+3d4+5`), or even use the dice roller as calculator (for example `/roll (5+3-2)*7/3`).
 - **Keep/drop:**
   When you roll more than one die, you can add an instruction to the end to keep some and drop other dice:
