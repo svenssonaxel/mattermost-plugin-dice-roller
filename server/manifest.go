@@ -40,6 +40,14 @@ const manifestStr = `
         "help_text": "When true, enable functionality specific to DnD 5e. This includes advantage, disadvantage, stats, and death saving throws.",
         "placeholder": "",
         "default": true
+      },
+      {
+        "key": "enable_latex",
+        "display_name": "Enable LaTeX:",
+        "type": "bool",
+        "help_text": "When true, output from /analyzeroll and /roll may use inline LaTeX. This requires that you also enable SITE CONFIGURATION -\u003e Posts -\u003e Inline Latex Rendering.",
+        "placeholder": "",
+        "default": true
       }
     ]
   }

@@ -23,6 +23,7 @@ import (
 // copy appropriate for your types.
 type configuration struct {
 	EnableDnd5e bool `json:"enable_dnd5e"`
+	EnableLatex bool `json:"enable_latex"`
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -42,6 +43,7 @@ func (p *Plugin) getConfiguration() *configuration {
 	if p.configuration == nil {
 		return &configuration{
 			EnableDnd5e: true,
+			EnableLatex: true,
 		}
 	}
 

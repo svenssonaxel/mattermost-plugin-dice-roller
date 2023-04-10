@@ -72,6 +72,12 @@ Capital/small letters are interchangeable.
 
   ![demo](doc/demo_labels.png)
 
+### Roll analyzer
+Use the `/analyzeroll` command to see the average and probability distribution for a roll.
+This command takes the same arguments as the `/roll` command.
+For example, `/analyzeroll 3d4k1+5` will display:
+
+![demo](doc/demo_analyzeroll.png)
 ### Functionality specific to DnD 5e
 Some functionality is specific to DnD 5e.
 This can be turned off in settings.

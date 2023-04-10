@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/moussetc/mattermost-plugin-dice-roller/server/br"
+	"github.com/moussetc/mattermost-plugin-dice-roller/server/pd"
 )
 
 // Types
@@ -37,6 +40,7 @@ type NodeSpecialization interface {
 	//    indentation prefix. The details list either starts with a newline or is the
 	//    empty string.
 	render(n Node, ind string, rr int, rcok bool) (string, string, string)
+	prob(n Node) pd.PD
 }
 type Roller func(int) int
 type GroupExpr struct{}
@@ -157,11 +161,7 @@ func (sp Dice) value(_ Node) int {
 }
 func (Stats) value(_ Node) int { return 0 }
 func (DeathSave) value(n Node) int {
-	var ret = 0
-	for _, c := range n.child {
-		ret += c.value()
-	}
-	return ret
+	return n.child[0].value()
 }
 func (sp Labeled) value(n Node) int {
 	return n.child[0].value()
@@ -391,4 +391,64 @@ func (sp CommaList) rollComment(n Node, conf configuration) string {
 		return n.child[0].sp.rollComment(n.child[0], conf)
 	}
 	return ROLL_COMMENT_NOTHING
+}
+
+// Probability distributions
+type PD = pd.PD
+
+var cpd = func(c int) PD { return pd.Constant(br.New(c)) }
+var zeroPD = cpd(0)
+var onePD = cpd(1)
+
+func (n Node) prob() PD {
+	return n.sp.prob(n)
+}
+func (sp GroupExpr) prob(n Node) PD {
+	return n.child[0].prob()
+}
+func (sp Natural) prob(n Node) PD {
+	return cpd(n.value())
+}
+func (sp Sum) prob(n Node) PD {
+	var ret = zeroPD
+	for i, c := range n.child {
+		switch sp.ops[i] {
+		case "+", "":
+			ret = ret.Plus(c.prob())
+		case "-":
+			ret = ret.Minus(c.prob())
+		}
+	}
+	return ret
+}
+func (sp Prod) prob(n Node) PD {
+	var ret = onePD
+	for i, c := range n.child {
+		switch sp.ops[i] {
+		case "*", "×", "":
+			ret = ret.Times(c.prob())
+		case "/":
+			ret = ret.DivAndRoundTowardsZero(c.prob())
+		}
+	}
+	return ret
+}
+func (sp Dice) prob(_ Node) PD {
+	return pd.Dice(sp.n, sp.x, sp.l, sp.n-sp.h)
+}
+func (Stats) prob(n Node) PD {
+	return pd.ErrPD // todo: maybe list of probs after sorting
+}
+func (DeathSave) prob(n Node) PD {
+	return pd.ErrPD // todo: maybe constant string.
+}
+func (sp Labeled) prob(n Node) PD {
+	return n.child[0].prob()
+}
+func (sp CommaList) prob(n Node) PD {
+	if len(n.child) == 1 {
+		return n.child[0].prob()
+	} else {
+		return pd.ErrPD // todo: maybe list of probs
+	}
 }

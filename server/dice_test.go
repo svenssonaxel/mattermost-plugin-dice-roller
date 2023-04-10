@@ -168,7 +168,7 @@ func TestParserGoodInputs(t *testing.T) {
 			renderBasic: "3d20k1 = **20**\n- *3d20k1 (20 ~~10~~ ~~1~~) =* ***20***"},
 	}
 	for _, enableDnd := range []bool{false, true} {
-		conf := configuration{EnableDnd5e: enableDnd}
+		conf := configuration{EnableDnd5e: enableDnd, EnableLatex: true}
 		parse := GetParser(conf)
 		for _, testCase := range testCases {
 			parsedNode, err := parse(testCase.query)

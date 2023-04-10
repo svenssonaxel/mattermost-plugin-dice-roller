@@ -95,6 +95,7 @@ func initTestPlugin(t *testing.T) (*Plugin, *plugintest.API) {
 	p := Plugin{
 		configuration: &configuration{
 			EnableDnd5e: true,
+			EnableLatex: true,
 		},
 	}
 	p.parser = GetParser(*p.configuration)

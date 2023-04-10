@@ -2,6 +2,7 @@
 To roll a set of dice, use the `/roll` command followed by one or several dice expressions.
 The results will be shown in the channel by @dicerollerbot, including total results and details as needed.
 Capital/small letters are interchangeable.
+You can also replace `/roll` by `/analyzeroll` to see the average and probability distribution for the roll.
 
 - **Basic dice:**
   `NdX` is `N` dice, each with `X` sides.
