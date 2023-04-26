@@ -40,7 +40,7 @@ func (p *Plugin) OnActivate() error {
 		DisplayName:      "Dice roller ⚄",
 		AutoComplete:     true,
 		AutoCompleteDesc: "Roll one or several dice. ⚁ ⚄ Try /roll help for a list of possibilities.",
-		AutoCompleteHint: "20 d6+4 3d4 [sum]",
+		AutoCompleteHint: "(3d20+4)/2",
 	})
 }
 
@@ -52,11 +52,8 @@ func (p *Plugin) GetHelpMessage() *model.CommandResponse {
 	return &model.CommandResponse{
 		ResponseType: model.CommandResponseTypeEphemeral,
 		Text: "Here are some examples:\n" +
-			"- `/roll 20` to roll a 20-sided die. You can use any number.\n" +
-			"- `/roll 5D6` to roll five 6-sided dice in one go.\n" +
-			"- `/roll 5D6+3` to roll five 6-sided dice and add 3 the result of each die.\n" +
-			"- `/roll 5D6 +3` (with a space) to roll five 6-sided dice and add 3 the total.\n" +
-			"- `/roll 5 d8 13D20` to roll different dice at the same time.\n" +
+			"- `/roll 3d20` Roll 3 `d20` dice and add the results.\n" +
+			"- `/roll (5+3-2)*7/3` will use `()+-*/` with their usual meanings, except `/` rounds down.\n" +
 			"- `/roll help` will show this help text.\n\n" +
 			" ⚅ ⚂ Let's get rolling! ⚁ ⚄",
 		Props: props,
@@ -77,7 +74,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 			return p.GetHelpMessage(), nil
 		}
 
-		post, generatePostError := p.generateDicePost(query, args.UserId, args.ChannelId, args.RootId)
+		post, generatePostError := p.generateDicePost(query, args.UserId, args.ChannelId, args.RootId, func(x int) int { return 1 + rand.Intn(x) })
 		if generatePostError != nil {
 			return nil, generatePostError
 		}
@@ -92,7 +89,7 @@ func (p *Plugin) ExecuteCommand(_ *plugin.Context, args *model.CommandArgs) (*mo
 	return nil, appError("Expected trigger "+cmd+" but got "+args.Command, nil)
 }
 
-func (p *Plugin) generateDicePost(query, userID, channelID, rootID string) (*model.Post, *model.AppError) {
+func (p *Plugin) generateDicePost(query, userID, channelID, rootID string, roller Roller) (*model.Post, *model.AppError) {
 	// Get the user to display their name
 	user, userErr := p.API.GetUser(userID)
 	if userErr != nil {
@@ -103,48 +100,15 @@ func (p *Plugin) generateDicePost(query, userID, channelID, rootID string) (*mod
 		displayName = user.Username
 	}
 
-	text := fmt.Sprintf("**%s** rolls *%s* = ", displayName, query)
-	sum := 0
-	rollRequests := strings.Fields(query)
-	if len(rollRequests) == 0 || query == "sum" {
-		return nil, appError("No roll request arguments found (such as '20', '4d6', etc.).", nil)
-	}
-	singleResultCount := 0
-	numericDiceCount := 0
-	formattedRollDetails := make([]string, len(rollRequests))
-	for i, rollRequest := range rollRequests {
-		// Ignore the 'sum' keyword, remnant of a previous version
-		// kept for the compatibility
-		if rollRequest == "sum" {
-			continue
-		}
-		result, err := rollDice(rollRequest)
-		if err != nil {
-			return nil, appError(fmt.Sprintf("%s See `/roll help` for examples.", err.Error()), err)
-		}
-		if result.rollType == numeric {
-			numericDiceCount++
-			rollDetails := fmt.Sprintf("%s: ", rollRequest)
-			singleResultCount += len(result.results)
-			for _, roll := range result.results {
-				rollDetails += fmt.Sprintf("%d ", roll)
-				sum += roll
-			}
-			formattedRollDetails[i] = strings.TrimSpace(rollDetails)
-		} else {
-			formattedRollDetails[i] = fmt.Sprintf("%+d", result.sumModifier)
-			sum += result.sumModifier
-		}
+	parsedNode, err := parse(query)
+	if err != nil {
+		return nil, appError(fmt.Sprintf("%s: See `/roll help` for examples.", err.Error()), err)
 	}
 
-	// Always display the total
-	text += fmt.Sprintf("**%d**", sum)
+	rolledNode := parsedNode.roll(roller)
+	renderResult := rolledNode.render("")
 
-	// Display roll details only of necessary
-	if singleResultCount > 1 {
-		formattedRollDetails = filterEmptyString(formattedRollDetails)
-		text += fmt.Sprintf("\n- %s", strings.Join(formattedRollDetails, "\n- "))
-	}
+	text := fmt.Sprintf("**%s** rolls %s", displayName, renderResult)
 
 	return &model.Post{
 		UserId:    p.diceBotID,
@@ -152,16 +116,6 @@ func (p *Plugin) generateDicePost(query, userID, channelID, rootID string) (*mod
 		RootId:    rootID,
 		Message:   text,
 	}, nil
-}
-
-func filterEmptyString(arr []string) []string {
-	result := []string{}
-	for _, val := range arr {
-		if val != "" {
-			result = append(result, val)
-		}
-	}
-	return result
 }
 
 func appError(message string, err error) *model.AppError {

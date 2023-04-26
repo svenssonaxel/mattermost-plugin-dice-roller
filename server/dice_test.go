@@ -1,174 +1,80 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRange(t *testing.T) {
-	res, err := rollDice("1000d20")
-	assert.NotNil(t, err)
-	assert.Nil(t, res)
-}
-
-func TestRange1(t *testing.T) {
-	res, err := rollDice("1000d1")
-	assert.NotNil(t, err)
-	assert.Nil(t, res)
-}
-
-func TestRange2(t *testing.T) {
-	res, err := rollDice("10d20")
-	assert.Nil(t, err)
-	assert.NotNil(t, res)
-	assert.Equal(t, 10, len(res.results))
-	for _, val := range res.results {
-		if val <= 0 || val > 20 {
-			t.Errorf("Value '%d' is not valid for a D20 roll", val)
-		}
-	}
-}
-
-func TestRange3(t *testing.T) {
-	res, err := rollDice("10d1")
-	assert.Nil(t, err)
-	assert.NotNil(t, res)
-	assert.Equal(t, 10, len(res.results))
-	for _, val := range res.results {
-		if val != 1 {
-			t.Errorf("Value '%d' is not valid for a D1 roll", val)
-		}
-	}
-}
-
-func TestD20(t *testing.T) {
-	res, err := rollDice("d20")
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 20, res.dieSides)
-	assert.Equal(t, 1, len(res.results))
-}
-
-func Test5d20(t *testing.T) {
-	res, err := rollDice("5d20")
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 20, res.dieSides)
-	assert.Equal(t, 5, len(res.results))
-}
-
-func Test20d1(t *testing.T) {
-	res, err := rollDice("20D1")
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, res.dieSides)
-	assert.Equal(t, 20, len(res.results))
-}
-
-func Test1(t *testing.T) {
-	res, err := rollDice("1")
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 1, res.dieSides)
-	assert.Equal(t, 1, len(res.results))
-}
-
-func Test12(t *testing.T) {
-	res, err := rollDice("12")
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 12, res.dieSides)
-	assert.Equal(t, 1, len(res.results))
-}
-
-func TestModifiersOK(t *testing.T) {
+func TestParserGoodInputs(t *testing.T) {
 	testCases := []struct {
-		dice           string
-		resultType     RollType
-		comparisonType string
-		compareValue   int
+		query    string
+		rolls    *[]int
+		expected int
 	}{
-		{dice: "20+100", resultType: numeric, comparisonType: "greather", compareValue: 100},
-		{dice: "2D6+10", resultType: numeric, comparisonType: "greather", compareValue: 11},
-		{dice: "1+0", resultType: numeric, comparisonType: "equal", compareValue: 1},
-		{dice: "d6-100", resultType: numeric, comparisonType: "lesser", compareValue: -93},
-		{dice: "+10", resultType: sumModifier, comparisonType: "equals", compareValue: 10},
-		{dice: "-42", resultType: sumModifier, comparisonType: "equals", compareValue: -42},
-		{dice: "+42", resultType: sumModifier, comparisonType: "equals", compareValue: 42},
+		{query: "1", expected: 1},
+		{query: "5", expected: 5},
+		{query: "5+3", expected: 8},
+		{query: "(5+3)", expected: 8},
+		{query: "(5-3)", expected: 2},
+		{query: "(10-3)/2", expected: 3},
+		{query: "(10-3)*2", expected: 14},
+		{query: "(10-3)*2", expected: 14},
+		{query: "10-3*2", expected: 4},
+		{query: "10-(3*2)", expected: 4},
+		{query: "d20", rolls: &[]int{12}, expected: 12},
+		{query: "3d20", rolls: &[]int{12, 10, 3}, expected: 25},
+		{query: "d20-18d4k5",
+			rolls:    &[]int{11, 3, 1, 1, 1, 1, 2, 3, 4, 2, 4, 4, 2, 2, 4, 1, 4, 3, 4},
+			expected: -9,
+			//render:   "d20-18d4k5 = **-9**\n- *d20 =* ***11***\n- *18d4k5 (~~3~~ ~~1~~ ~~1~~ ~~1~~ ~~1~~ ~~2~~ ~~3~~ ~~4~~ ~~2~~ 4 4 ~~2~~ ~~2~~ 4 ~~1~~ 4 ~~3~~ 4) =* ***20***",
+		},
 	}
 	for _, testCase := range testCases {
-		res, err := rollDice(testCase.dice)
-		message := "Testing case " + testCase.dice
+		parsedNode, err := parse(testCase.query)
+		message := "Testing case " + testCase.query
 		assert.Nil(t, err, message)
-		assert.NotNil(t, res, message)
-
-		if testCase.resultType == numeric {
-			assert.GreaterOrEqual(t, len(res.results), 1, message)
-			assert.Equal(t, numeric, res.rollType)
-			for _, result := range res.results {
-				switch testCase.comparisonType {
-				case "equal":
-					assert.Equal(t, testCase.compareValue, result, message)
-				case "lesser":
-					assert.Less(t, result, testCase.compareValue, message)
-				case "greater":
-					assert.Greater(t, testCase.compareValue, result, message)
-				}
+		assert.NotNil(t, parsedNode, message)
+		rollerError := ""
+		rollerIdx := 0
+		roller := func(x int) int {
+			ret := 0
+			if testCase.rolls == nil {
+				rollerError = "Needs mocked rolls"
+				return 1001
 			}
-		} else {
-			assert.Equal(t, sumModifier, res.rollType)
-			assert.Equal(t, testCase.compareValue, res.sumModifier, message)
+			rolls := *testCase.rolls
+			if len(rolls) <= rollerIdx {
+				rollerError = "Needs more mocked rolls"
+				return 1002
+			}
+			ret = rolls[rollerIdx]
+			rollerIdx++
+			if ret < 1 || x < ret {
+				rollerError = "Roll out of range"
+			}
+			return ret
 		}
+		rolledNode := parsedNode.roll(roller)
+		assert.Equal(t, "", rollerError)
+		if 0 < rollerIdx && testCase.rolls != nil {
+			assert.Equal(t, rollerIdx, len(*testCase.rolls))
+		}
+		assert.Equal(t, testCase.expected, rolledNode.value(), message)
 	}
 }
 
-func TestModifiersKO(t *testing.T) {
-	badSyntaxModifiers := [...]string{"+HAHAH", "+-5", "+haha"}
-	for _, badInput := range badSyntaxModifiers {
-		res, err := rollDice(badInput)
-		assert.NotNil(t, err, "Testing "+badInput)
-		assert.Nil(t, res, "Testing "+badInput)
+func TestParserBadInputs(t *testing.T) {
+	testCases := []string{
+		"hello",
+		"-2",
+		"5+",
+		"/7",
+		"(10-3",
 	}
-}
-
-func TestD(t *testing.T) {
-	res, err := rollDice("D")
-	assert.Nil(t, res)
-	assert.NotNil(t, err)
-}
-
-func Test18D(t *testing.T) {
-	res, err := rollDice("18D")
-	assert.Nil(t, res)
-	assert.NotNil(t, err)
-}
-
-func TestHahaha(t *testing.T) {
-	res, err := rollDice("D=hahaha")
-	assert.Nil(t, res)
-	assert.NotNil(t, err)
-}
-
-func TestBigD(t *testing.T) {
-	res, err := rollDice("D1000")
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 1000, res.dieSides)
-	assert.Equal(t, 1, len(res.results))
-}
-
-func TestManyD(t *testing.T) {
-	res, err := rollDice(fmt.Sprintf("%dD10", maxDice))
-	assert.NotNil(t, res)
-	assert.Nil(t, err)
-	assert.Equal(t, 10, res.dieSides)
-	assert.Equal(t, maxDice, len(res.results))
-}
-
-func TestTooManyD(t *testing.T) {
-	res, err := rollDice(fmt.Sprintf("%dD10", maxDice+1))
-	assert.Nil(t, res)
-	assert.NotNil(t, err)
+	for _, testCase := range testCases {
+		_, err := parse(testCase)
+		message := "Testing case " + testCase
+		assert.NotNil(t, err, message)
+	}
 }

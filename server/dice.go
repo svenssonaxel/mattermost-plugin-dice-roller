@@ -2,125 +2,136 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
-	"regexp"
-	"strconv"
+	"sort"
 )
 
-// RollType list the kinds of 'rolls' supported by the plugin
-type RollType string
-
-const (
-	numeric     RollType = "numeric"
-	sumModifier RollType = "sumModifier"
-)
-
-type diceRolls struct {
-	rollType    RollType
-	dieSides    int
-	results     []int
-	sumModifier int
+// Types
+type Node struct {
+	token string
+	child []Node
+	sp    NodeSpecialization
+}
+type NodeSpecialization interface {
+	roll(Node, Roller) NodeSpecialization
+	value(Node) int
+	render(Node, string) string
+}
+type Roller func(int) int
+type Natural struct{ n int }
+type Sum struct{ ops []string }
+type Prod struct{ ops []string }
+type Dice struct {
+	n     int          // number of dice
+	x     int          // number of sides
+	l     int          // index in sorted results for first dice to keep, e.g. 0 to keep all
+	h     int          // index in sorted results for first dice after the last to keep, e.g. n to keep all
+	rolls []RollResult // roll results
+}
+type RollResult struct {
+	result int
+	use    bool
+	order  int // order rolled
+	rank   int // index when sorted by (result, order)
 }
 
-const (
-	maxDice int = 100
-)
-
-func rollDice(code string) (*diceRolls, error) {
-	sumModifierResult, err := readSumModifier(code)
-	if err != nil {
-		return nil, err
+// Roller
+func (n Node) roll(roller Roller) Node {
+	child := make([]Node, len(n.child))
+	for i, c := range n.child {
+		child[i] = c.roll(roller)
 	}
-	if sumModifierResult != nil {
-		return sumModifierResult, nil
+	sp := n.sp.roll(n, roller)
+	return Node{token: n.token, child: child, sp: sp}
+}
+func (sp Natural) roll(_ Node, _ Roller) NodeSpecialization { return sp }
+func (sp Sum) roll(_ Node, _ Roller) NodeSpecialization     { return sp }
+func (sp Prod) roll(_ Node, _ Roller) NodeSpecialization    { return sp }
+func (sp Dice) roll(n Node, roller Roller) NodeSpecialization {
+	rolls := make([]RollResult, sp.n)
+	for i := 0; i < sp.n; i++ {
+		rolls[i].result = roller(sp.x)
+		rolls[i].use = false
+		rolls[i].order = i
 	}
-	numericModifierResult, err := rollNumericDice(code)
-	if err != nil {
-		return nil, err
+	sort.Slice(rolls, func(i int, j int) bool {
+		if rolls[i].result != rolls[j].result {
+			return rolls[i].result < rolls[j].result
+		}
+		return rolls[i].order < rolls[j].order
+	})
+	for i := 0; i < sp.n; i++ {
+		rolls[i].rank = i
 	}
-	if numericModifierResult != nil {
-		return numericModifierResult, nil
+	sort.Slice(rolls, func(i int, j int) bool {
+		return rolls[i].order < rolls[j].order
+	})
+	for i := sp.l; i < sp.h; i++ {
+		rolls[i].use = true
 	}
-
-	return nil, fmt.Errorf("could not parse '%s'", code)
+	return Dice{n: sp.n, x: sp.x, l: sp.l, h: sp.h, rolls: rolls}
 }
 
-func rollNumericDice(code string) (*diceRolls, error) {
-	// <optional number of dice><optional 'd' or 'D'><number of sides><optional modifier>
-	re := regexp.MustCompile(`^((?P<number>([1-9]\d*))?[dD])?(?P<sides>[1-9]\d*)(?P<diceModifier>[+-]\d+)?$`)
-	matchIndexes := re.FindStringSubmatch(code)
-	if matchIndexes == nil {
-		return nil, fmt.Errorf("'%s' is not a valid die code", code)
-	}
-	var numberStr string
-	var sidesStr string
-	var diceModifierStr string
-	for i, name := range re.SubexpNames() {
-		switch name {
-		case "number":
-			numberStr = matchIndexes[i]
-		case "sides":
-			sidesStr = matchIndexes[i]
-		case "diceModifier":
-			diceModifierStr = matchIndexes[i]
+// Evaluate
+func (n Node) value() int { return n.sp.value(n) }
+func (sp Natural) value(_ Node) int {
+	return sp.n
+}
+func (sp Sum) value(n Node) int {
+	var ret int = 0
+	for i, c := range n.child {
+		switch sp.ops[i] {
+		case "+":
+			ret += c.value()
+		case "-":
+			ret -= c.value()
 		}
 	}
-
-	number := 1
-	if numberStr != "" {
-		var err error
-		number, err = strconv.Atoi(numberStr)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse a number of dice from '%s'", numberStr)
-		}
-		if number > maxDice {
-			// Complain about insanity.
-			return nil, fmt.Errorf(fmt.Sprintf("'%s' is too many dice; maximum is %d.", numberStr, maxDice))
-		}
-	}
-
-	sides, err := strconv.Atoi(sidesStr)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse a number of sides from '%s'", sidesStr)
-	}
-
-	modifier := 0
-	if diceModifierStr != "" {
-		modifier, err = strconv.Atoi(diceModifierStr)
-		if err != nil {
-			return nil, fmt.Errorf("could not parse a modifier from '%s'", diceModifierStr)
+	return ret
+}
+func (sp Prod) value(n Node) int {
+	var ret int = 1
+	for i, c := range n.child {
+		switch sp.ops[i] {
+		case "*":
+			ret *= c.value()
+		case "/":
+			ret /= c.value()
 		}
 	}
-
-	rolls := make([]int, number)
-	for i := 0; i < number; i++ {
-		rolls[i] = rollDie(sides) + modifier
+	return ret
+}
+func (sp Dice) value(_ Node) int {
+	var ret int = 0
+	for _, rr := range sp.rolls {
+		if rr.use {
+			ret += rr.result
+		}
 	}
-
-	return &diceRolls{rollType: numeric, dieSides: sides, results: rolls}, nil
+	return ret
 }
 
-func readSumModifier(code string) (*diceRolls, error) {
-	// <optional number of dice><optional 'd' or 'D'><number of sides><optional modifier>
-	re := regexp.MustCompile(`^(?P<sumModifier>[+-]\d+)$`)
-	matchIndexes := re.FindStringSubmatch(code)
-	if matchIndexes == nil {
-		return nil, nil
-	}
-	var modifierStr string
-	for i, name := range re.SubexpNames() {
-		if name == "sumModifier" {
-			modifierStr = matchIndexes[i]
-		}
-	}
-
-	modifier, err := strconv.Atoi(modifierStr)
-	if err != nil {
-		return nil, fmt.Errorf("could not parse a modifier from '%s'", modifierStr)
-	}
-	return &diceRolls{rollType: sumModifier, sumModifier: modifier}, nil
+// Render
+func (n Node) render(ind string) string {
+	return fmt.Sprintf("*%s* = %s", n.token, n.sp.render(n, ind))
 }
-
-func rollDie(sides int) int {
-	return 1 + rand.Intn(sides) //nolint:gosec
+func (sp Natural) render(_ Node, _ string) string { return fmt.Sprintf("**%d**", sp.n) }
+func (sp Sum) render(n Node, ind string) string   { return renderSumProd(n, ind, sp.ops) }
+func (sp Prod) render(n Node, ind string) string  { return renderSumProd(n, ind, sp.ops) }
+func renderSumProd(n Node, ind string, ops []string) string {
+	if len(n.child) == 1 {
+		return n.child[0].sp.render(n.child[0], ind)
+	}
+	ret := fmt.Sprintf("**%d**", n.value())
+	cind := increaseIndent(ind)
+	for _, c := range n.child {
+		ret += "\n" + cind + c.render(cind)
+	}
+	return ret
 }
+func increaseIndent(ind string) string {
+	if ind == "" {
+		return "- "
+	}
+	return "  " + ind
+}
+func (sp Dice) render(n Node, _ string) string { return fmt.Sprintf("**%d**", sp.value(n)) }
