@@ -1,16 +1,13 @@
 package main
 
 import (
+	"io/ioutil"
 	"path/filepath"
 	"reflect"
 
-	manifest "github.com/moussetc/mattermost-plugin-dice-roller"
-
 	"github.com/pkg/errors"
 
-	"github.com/mattermost/mattermost-server/v6/model"
-
-	pluginapi "github.com/mattermost/mattermost-plugin-api"
+	"github.com/mattermost/mattermost/server/public/model"
 )
 
 // configuration captures the plugin's external configuration as exposed in the Mattermost server
@@ -96,18 +93,33 @@ func (p *Plugin) OnConfigurationChange() error {
 }
 
 func (p *Plugin) defineBot() error {
-	client := pluginapi.NewClient(p.API, p.Driver)
 	bot := model.Bot{
 		Username:    "dicerollerbot",
 		DisplayName: "Dice Roller",
-		Description: "A bot account created by " + manifest.Manifest.Name + " plugin.",
+		Description: "A bot account created by " + manifest.Name + " plugin.",
 	}
-	botID, ensureBotError := client.Bot.EnsureBot(&bot, pluginapi.ProfileImagePath(filepath.Join("assets", "icon.png")))
+	botID, ensureBotError := p.API.EnsureBotUser(&bot)
 	if ensureBotError != nil {
 		return errors.Wrap(ensureBotError, "failed to ensure dice bot")
 	}
 
 	p.diceBotID = botID
+
+	// Set ../assets/icon.png as profile image for the bot account
+	bundlePath, bpErr := p.API.GetBundlePath()
+	if bpErr != nil {
+		return bpErr
+	}
+
+	iconData, ioErr := ioutil.ReadFile(filepath.Join(bundlePath, "assets", "icon.png"))
+	if ioErr != nil {
+		return ioErr
+	}
+
+	appErr := p.API.SetProfileImage(botID, iconData)
+	if appErr != nil {
+		return appErr
+	}
 
 	return nil
 }
